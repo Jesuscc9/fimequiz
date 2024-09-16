@@ -1,6 +1,5 @@
 export default {
   async fetch(request, env) {
-    // Definir las categorías y subretos
     const challengeCategories = {
       'Basic Operations': [
         'A C code snippet that performs arithmetic operations (addition, subtraction, multiplication, division).',
@@ -24,7 +23,6 @@ export default {
       ]
     }
 
-    // Errores comunes
     const errorOptions = [
       'a missing semicolon',
       'an incorrect data type',
@@ -33,41 +31,80 @@ export default {
       'memory allocation without freeing the memory'
     ]
 
-    // Seleccionar aleatoriamente una categoría, un subreto, y un error
-    const selectedCategory =
-      Object.keys(challengeCategories)[
-        Math.floor(Math.random() * Object.keys(challengeCategories).length)
-      ]
-    const selectedTask =
-      challengeCategories[selectedCategory][
-        Math.floor(Math.random() * challengeCategories[selectedCategory].length)
-      ]
-    const selectedError =
-      errorOptions[Math.floor(Math.random() * errorOptions.length)]
+    const getRandomElement = (array) =>
+      array[Math.floor(Math.random() * array.length)]
 
-    let messages = [
+    const selectedCategory = getRandomElement(Object.keys(challengeCategories))
+    const selectedTask = getRandomElement(challengeCategories[selectedCategory])
+    const selectedError = getRandomElement(errorOptions)
+
+    const messages = [
       {
         role: 'system',
         content:
-          'You are a helpful assistant specialized in creating programming challenges.'
+          'You are a Spanish JSON generator that only outputs valid JSON objects. Do not include any explanations, comments, or additional text. You are a programming teacher.'
       },
       {
         role: 'user',
         content: `
-        Generate a random programming challenge in C. The challenge should include:
-        1. ${selectedTask}
-        2. Introduce ${selectedError} in the code.
-        3. Create a multiple-choice question to identify the error in the code, providing four answer options, one of which is correct.
-        4. Provide an explanation of the error and how to correct it.
-        Format the response in JSON with the following keys: code_snippet, question, options, and explanation.
+        Generate a random programming challenge in C with the following structure and in Spanish:
+        {
+          "code": "C code here",
+          "title": "Title of the challenge",
+          "question": {
+            "type": "multiple-choice",
+            "options": [
+              {"id": 0, "key": "a", "content": "Option A"},
+              {"id": 1, "key": "b", "content": "Option B"},
+              {"id": 2, "key": "c", "content": "Option C"},
+              {"id": 3, "key": "d", "content": "Option D"}
+            ],
+            "correct_option_key": "key of the correct option"
+          },
+          "instruction": "Instruction must be a question. The instruction must led the user to select the right answer based on the provided code with an error. Remember the context is a MOBILE GAME that works as a programming quiz.",
+          "correct_option_explanation": "Explanation for why the correct option is correct",
+          "correct_code": "Corrected C code here"
+        }
+        Return only the JSON object with no extra text or comments, and ensure that it is well-formed and complete.
         `
       }
     ]
 
-    const response = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
-      messages
-    })
+    try {
+      const aiResponse = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+        stream: false, // Ensure streaming is disabled for a traditional response
+        max_tokens: 512,
+        messages: messages
+      })
 
-    return Response.json({ response })
+      const parsedResponse = JSON.parse(aiResponse.response)
+
+      // Validate the parsedResponse
+      if (
+        parsedResponse &&
+        parsedResponse.code &&
+        parsedResponse.question &&
+        Array.isArray(parsedResponse.question.options) &&
+        parsedResponse.instruction &&
+        parsedResponse.correct_option_explanation &&
+        typeof parsedResponse.correct_code === 'string' &&
+        typeof parsedResponse.question.correct_option_key === 'string'
+      ) {
+        return Response.json(parsedResponse)
+      } else {
+        return Response.json(
+          {
+            error: 'Invalid response structure from AI.',
+            rawContent: aiResponse.response
+          },
+          { status: 500 }
+        )
+      }
+    } catch (error) {
+      return Response.json(
+        { error: 'Failed to parse the JSON from AI response.' },
+        { status: 500 }
+      )
+    }
   }
 }
