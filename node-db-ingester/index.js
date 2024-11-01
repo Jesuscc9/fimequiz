@@ -1,17 +1,21 @@
 // Cargar las variables del archivo .env usando import
 import 'dotenv/config' // Usamos dotenv para cargar las variables de entorno
 
+// ASSIGNMENT_AND_ARITHMETIC_OPERATIONS, SIMPLE_CONDITIONALS, NESTED_CONDITIONALS, BASIC_LOOPS, BASIC_ARRAYS
+const TOPICS_IDS_ENUM = {
+  ASSIGNMENT_AND_ARITHMETIC_OPERATIONS: 1,
+  SIMPLE_CONDITIONALS: 2,
+  NESTED_CONDITIONALS: 3,
+  BASIC_LOOPS: 4,
+  BASIC_ARRAYS: 5
+}
+
 // Importar las bibliotecas necesarias
-import { createClient } from '@supabase/supabase-js'
+import fetch from 'node-fetch'
+import * as xlsx from 'xlsx'
+import fs from 'fs'
 
-// Acceder a las variables de entorno desde .env
-const SUPABASE_URL = process.env.SUPABASE_URL
-const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE
-
-// Crear cliente de Supabase usando las variables de entorno
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE)
-
-// Función para hacer el fetch y guardar en las tablas
+// Función para hacer el fetch y guardar en el archivo de Excel
 async function fetchAndSaveData() {
   try {
     // Hacer el fetch al endpoint
@@ -23,64 +27,51 @@ async function fetchAndSaveData() {
     // Mostrar los datos para verificar (opcional)
     console.log('Datos recibidos:', data)
 
-    // Primero insertar el quiz en la tabla `quizzes`
-    const { data: quizData, error: quizError } = await supabase
-      .from('quizzes')
-      .insert([
-        {
-          code: data.code, // El código C devuelto por la API
-          instruction: data.instruction, // La instrucción del JSON
-          correct_code: data.correct_code // El código correcto del JSON
-        }
-      ])
-      .select()
+    // Formatear los datos en un formato adecuado para Excel
+    const quizData = [
+      {
+        Code: data.code,
+        Instruction: data.instruction,
+        Correct_Code: data.correct_code
+      }
+    ]
 
-    if (quizError) {
-      throw quizError
-    }
+    const questionData = [
+      {
+        Quiz_ID: 1, // Asumiendo que este es el ID único para el Excel
+        Correct_Option_Key: data.question.correct_option_key,
+        Correct_Option_Explanation: data.correct_option_explanation,
+        Topic_ID: TOPICS_IDS_ENUM[data.topic]
+      }
+    ]
 
-    const quizId = quizData[0].id // Obtener el ID del quiz insertado
-
-    // Insertar la pregunta en la tabla `questions`
-    const { data: questionData, error: questionError } = await supabase
-      .from('questions')
-      .insert([
-        {
-          quiz_id: quizId, // ID del quiz insertado
-          type: data.question.type, // Tipo de pregunta (e.g., "multiple-choice")
-          correct_option_key: data.question.correct_option_key, // ID de la opción correcta
-          correct_option_explanation: data.correct_option_explanation // Explicación de la opción correcta
-        }
-      ])
-      .select()
-
-    if (questionError) {
-      throw questionError
-    }
-
-    const questionId = questionData[0].id // Obtener el ID de la pregunta insertada
-
-    // Insertar opciones en la tabla `options`
-    const options = data.question.options.map((option) => ({
-      question_id: questionId, // ID de la pregunta insertada
-      key: option.key, // Clave de la opción (ej. 'a', 'b', 'c', 'd')
-      content: option.content // Contenido de la opción
+    const optionsData = data.question.options.map((option, index) => ({
+      Question_ID: 1, // Asumiendo que este es el ID único para el Excel
+      Option_Key: option.key,
+      Option_Content: option.content
     }))
 
-    const { error: optionsError } = await supabase
-      .from('options')
-      .insert(options)
+    // Crear libro de Excel y hojas de trabajo
+    const workbook = xlsx.utils.book_new()
 
-    if (optionsError) {
-      throw optionsError
-    }
+    // Agregar datos a hojas separadas
+    const quizSheet = xlsx.utils.json_to_sheet(quizData)
+    const questionSheet = xlsx.utils.json_to_sheet(questionData)
+    const optionsSheet = xlsx.utils.json_to_sheet(optionsData)
 
-    console.log('Datos guardados correctamente en las tablas.')
+    // Agregar hojas al libro
+    xlsx.utils.book_append_sheet(workbook, quizSheet, 'Quizzes')
+    xlsx.utils.book_append_sheet(workbook, questionSheet, 'Questions')
+    xlsx.utils.book_append_sheet(workbook, optionsSheet, 'Options')
+
+    // Guardar el archivo Excel
+    const filePath = './challenge_data.xlsx'
+    xlsx.writeFile(workbook, filePath)
+
+    console.log('Datos guardados correctamente en el archivo Excel:', filePath)
   } catch (error) {
     console.error('Error al guardar los datos:', error.message)
   }
-
-  fetchAndSaveData()
 }
 
 // Ejecutar la función para realizar el fetch y guardar los datos

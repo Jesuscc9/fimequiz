@@ -1,5 +1,9 @@
 export default {
   async fetch(request, env) {
+    // Helper function to get a random element from an array
+    const getRandomElement = (array) =>
+      array[Math.floor(Math.random() * array.length)]
+
     const challengeCategories = {
       'Basic Operations': [
         'A C code snippet that performs arithmetic operations (addition, subtraction, multiplication, division).',
@@ -31,26 +35,53 @@ export default {
       'memory allocation without freeing the memory'
     ]
 
-    const getRandomElement = (array) =>
-      array[Math.floor(Math.random() * array.length)]
+    const difficultyLevels = ['easy', 'medium', 'hard']
 
     const selectedCategory = getRandomElement(Object.keys(challengeCategories))
     const selectedTask = getRandomElement(challengeCategories[selectedCategory])
     const selectedError = getRandomElement(errorOptions)
+    const selectedDifficulty = getRandomElement(difficultyLevels)
 
-    const messages = [
+    // Step 1: Generate the C code and the challenge title with more standardization
+    const messagesStep1 = [
       {
         role: 'system',
         content:
-          'You are a Spanish JSON generator that only outputs valid JSON objects. Do not include any explanations, comments, or additional text. You are a programming teacher.'
+          'You are a Spanish programming quiz generator for a mobile game. Always output valid JSON, and make sure the code snippet contains an error.'
       },
       {
         role: 'user',
         content: `
-        Generate a random programming challenge in C with the following structure and in Spanish:
+        Generate a random C programming challenge from the category "${selectedCategory}". Follow this structure exactly:
         {
-          "code": "C code here",
-          "title": "Title of the challenge",
+          "code": "A valid C code snippet related to ${selectedTask}, containing an intentional error like ${selectedError}",
+          "title": "A short and descriptive title that reflects the task related to ${selectedTask} from the category ${selectedCategory}"
+        }
+        Make sure the code contains only one error, and the title accurately describes the purpose of the code. Do not include explanations or comments, just the JSON.
+        `
+      }
+    ]
+
+    const aiResponseStep1 = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+      stream: false,
+      max_tokens: 512,
+      messages: messagesStep1
+    })
+
+    const parsedResponseStep1 = JSON.parse(aiResponseStep1.response)
+
+    // Step 2: Generate the multiple-choice question and options
+    const messagesStep2 = [
+      {
+        role: 'system',
+        content:
+          'You are a Spanish programming quiz generator for a mobile game. Only output valid JSON.'
+      },
+      {
+        role: 'user',
+        content: `
+        Generate a multiple-choice question for the following C code challenge. Return the question and options in JSON format:
+        {
           "question": {
             "type": "multiple-choice",
             "options": [
@@ -60,51 +91,82 @@ export default {
               {"id": 3, "key": "d", "content": "Option D"}
             ],
             "correct_option_key": "key of the correct option"
-          },
-          "instruction": "Instruction must be a question. The instruction must led the user to select the right answer based on the provided code with an error. Remember the context is a MOBILE GAME that works as a programming quiz.",
-          "correct_option_explanation": "Explanation for why the correct option is correct",
-          "correct_code": "Corrected C code here"
+          }
         }
-        Return only the JSON object with no extra text or comments, and ensure that it is well-formed and complete.
         `
       }
     ]
 
-    try {
-      const aiResponse = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
-        stream: false, // Ensure streaming is disabled for a traditional response
-        max_tokens: 512,
-        messages: messages
-      })
+    const aiResponseStep2 = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+      stream: false,
+      max_tokens: 512,
+      messages: messagesStep2
+    })
 
-      const parsedResponse = JSON.parse(aiResponse.response)
+    const parsedResponseStep2 = JSON.parse(aiResponseStep2.response)
 
-      // Validate the parsedResponse
-      if (
-        parsedResponse &&
-        parsedResponse.code &&
-        parsedResponse.question &&
-        Array.isArray(parsedResponse.question.options) &&
-        parsedResponse.instruction &&
-        parsedResponse.correct_option_explanation &&
-        typeof parsedResponse.correct_code === 'string' &&
-        typeof parsedResponse.question.correct_option_key === 'string'
-      ) {
-        return Response.json(parsedResponse)
-      } else {
-        return Response.json(
-          {
-            error: 'Invalid response structure from AI.',
-            rawContent: aiResponse.response
-          },
-          { status: 500 }
-        )
+    // Step 3: Generate the instruction and explanation for the correct option
+    const messagesStep3 = [
+      {
+        role: 'system',
+        content:
+          'You are a Spanish programming quiz generator for a mobile game. Only output valid JSON.'
+      },
+      {
+        role: 'user',
+        content: `
+        For the following challenge, provide the instruction as a question and the explanation of the correct option:
+        {
+          "instruction": "Instruction must lead the user to select the right answer based on the provided code.",
+          "correct_option_explanation": "Explanation for why the correct option is correct"
+        }
+        `
       }
-    } catch (error) {
-      return Response.json(
-        { error: 'Failed to parse the JSON from AI response.' },
-        { status: 500 }
-      )
+    ]
+
+    const aiResponseStep3 = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+      stream: false,
+      max_tokens: 512,
+      messages: messagesStep3
+    })
+
+    const parsedResponseStep3 = JSON.parse(aiResponseStep3.response)
+
+    // Step 4: Generate the corrected version of the C code
+    const messagesStep4 = [
+      {
+        role: 'system',
+        content:
+          'You are a Spanish programming quiz generator for a mobile game. Only output valid JSON.'
+      },
+      {
+        role: 'user',
+        content: `
+        Generate the corrected version of the following C code challenge:
+        {
+          "correct_code": "Corrected C code here"
+        }
+        `
+      }
+    ]
+
+    const aiResponseStep4 = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+      stream: false,
+      max_tokens: 512,
+      messages: messagesStep4
+    })
+
+    const parsedResponseStep4 = JSON.parse(aiResponseStep4.response)
+
+    // Combine all parts into one final JSON object including the difficulty level
+    const finalChallenge = {
+      ...parsedResponseStep1,
+      ...parsedResponseStep2,
+      ...parsedResponseStep3,
+      ...parsedResponseStep4,
+      difficulty: selectedDifficulty // Adding the difficulty level to the final output
     }
+
+    return Response.json(finalChallenge)
   }
 }
