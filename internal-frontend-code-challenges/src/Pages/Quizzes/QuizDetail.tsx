@@ -72,20 +72,18 @@ export default function QuizDetail() {
   const updateMutation = useMutation(
     async (updatedData) => {
       const updates = {}
-      if (updatedData.instruction !== initialData.instruction)
-        updates.instruction = updatedData.instruction
-      if (updatedData.code !== initialData.code) updates.code = updatedData.code
-      if (
-        updatedData.correctOptionExplanation !==
-        initialData.correctOptionExplanation
-      )
-        updates.correct_option_explanation =
-          updatedData.correctOptionExplanation
-
-      if (updatedData.reviewed !== initialData.reviewed)
-        updates.reviewed = updatedData.reviewed
 
       // Actualizar datos en la tabla 'quizzes'
+      if (updatedData.instruction !== initialData.instruction) {
+        updates.instruction = updatedData.instruction
+      }
+      if (updatedData.code !== initialData.code) {
+        updates.code = updatedData.code
+      }
+      if (updatedData.reviewed !== initialData.reviewed) {
+        updates.reviewed = updatedData.reviewed
+      }
+
       if (Object.keys(updates).length > 0) {
         const { error } = await supabase
           .from('quizzes')
@@ -97,12 +95,25 @@ export default function QuizDetail() {
         }
       }
 
-      // Actualizar correct_option_key en la tabla 'questions'
-      const questionId = data.questions[0].id // Obtiene el ID de la primera pregunta
+      // Actualizar correct_option_key y correct_option_explanation en la tabla 'questions'
+      const questionId = data.questions[0].id // ID de la primera pregunta
+      const questionUpdates = {}
+
       if (updatedData.correctOptionKey !== initialData.correctOptionKey) {
+        questionUpdates.correct_option_key = updatedData.correctOptionKey
+      }
+      if (
+        updatedData.correctOptionExplanation !==
+        initialData.correctOptionExplanation
+      ) {
+        questionUpdates.correct_option_explanation =
+          updatedData.correctOptionExplanation
+      }
+
+      if (Object.keys(questionUpdates).length > 0) {
         const { error } = await supabase
           .from('questions')
-          .update({ correct_option_key: updatedData.correctOptionKey })
+          .update(questionUpdates)
           .eq('id', questionId)
 
         if (error) {
